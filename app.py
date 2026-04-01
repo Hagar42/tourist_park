@@ -1,3 +1,5 @@
+import os
+
 from flask import Flask, render_template, request, redirect, url_for, flash
 
 from models import (
@@ -8,14 +10,10 @@ from models import (
 )
 
 app = Flask(__name__)
-app.secret_key = "dev-key-change-in-production"
+app.secret_key = os.environ.get("SECRET_KEY", "dev-key-change-in-production")
 
-
-@app.before_request
-def _init():
-    init_db()
-    # Run only once
-    app.before_request_funcs[None].remove(_init)
+# Initialise database at startup
+init_db()
 
 
 # ── Dashboard ──────────────────────────────────────────────
