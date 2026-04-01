@@ -1,62 +1,148 @@
-import sqlite3
 import os
+import sqlite3
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 
-DB_PATH = os.path.join(os.path.abspath(os.path.dirname(__file__)), "maintenance.db")
+DATABASE_URL = os.environ.get("DATABASE_URL")
+
+# Use PostgreSQL when DATABASE_URL is set, otherwise fall back to SQLite for local dev
+USE_PG = DATABASE_URL is not None
 
 
 def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
-    return conn
+    if USE_PG:
+        import psycopg2
+        import psycopg2.extras
+        conn = psycopg2.connect(DATABASE_URL)
+        conn.cursor_factory = psycopg2.extras.RealDictCursor
+        return conn
+    else:
+        db_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), "maintenance.db")
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON")
+        return conn
+
+
+def _execute(conn, query, params=None):
+    """Execute a query, adapting placeholder style for the active DB engine."""
+    if USE_PG:
+        # Convert ? placeholders to %s for psycopg2
+        query = query.replace("?", "%s")
+    cur = conn.cursor()
+    cur.execute(query, params or ())
+    return cur
+
+
+def _fetchall(conn, query, params=None):
+    cur = _execute(conn, query, params)
+    rows = cur.fetchall()
+    if USE_PG:
+        return [dict(r) for r in rows]
+    else:
+        return [dict(r) for r in rows]
+
+
+def _fetchone(conn, query, params=None):
+    cur = _execute(conn, query, params)
+    row = cur.fetchone()
+    if row is None:
+        return None
+    return dict(row)
 
 
 def init_db():
     conn = get_db()
-    conn.executescript("""
-        CREATE TABLE IF NOT EXISTS location (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            type TEXT NOT NULL CHECK(type IN ('site', 'amenity', 'common_area', 'infrastructure')),
-            description TEXT
-        );
 
-        CREATE TABLE IF NOT EXISTS staff (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            role TEXT NOT NULL,
-            phone TEXT,
-            active INTEGER NOT NULL DEFAULT 1
-        );
+    if USE_PG:
+        cur = conn.cursor()
 
-        CREATE TABLE IF NOT EXISTS task (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT NOT NULL,
-            description TEXT,
-            category TEXT NOT NULL CHECK(category IN (
-                'plumbing', 'electrical', 'grounds', 'cleaning',
-                'structural', 'equipment', 'safety', 'other'
-            )),
-            priority TEXT NOT NULL CHECK(priority IN ('low', 'medium', 'high', 'urgent')),
-            status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN (
-                'pending', 'in_progress', 'completed', 'cancelled'
-            )),
-            location_id INTEGER,
-            assigned_to INTEGER,
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL,
-            completed_at TEXT,
-            notes TEXT,
-            FOREIGN KEY (location_id) REFERENCES location(id),
-            FOREIGN KEY (assigned_to) REFERENCES staff(id)
-        );
-    """)
-    conn.commit()
+        # Create enum-like types via CHECK constraints
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS location (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                type TEXT NOT NULL CHECK(type IN ('site', 'amenity', 'common_area', 'infrastructure')),
+                description TEXT
+            )
+        """)
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS staff (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                role TEXT NOT NULL,
+                phone TEXT,
+                active BOOLEAN NOT NULL DEFAULT TRUE
+            )
+        """)
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS task (
+                id SERIAL PRIMARY KEY,
+                title TEXT NOT NULL,
+                description TEXT,
+                category TEXT NOT NULL CHECK(category IN (
+                    'plumbing', 'electrical', 'grounds', 'cleaning',
+                    'structural', 'equipment', 'safety', 'other'
+                )),
+                priority TEXT NOT NULL CHECK(priority IN ('low', 'medium', 'high', 'urgent')),
+                status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN (
+                    'pending', 'in_progress', 'completed', 'cancelled'
+                )),
+                location_id INTEGER REFERENCES location(id),
+                assigned_to INTEGER REFERENCES staff(id),
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                completed_at TEXT,
+                notes TEXT
+            )
+        """)
+        conn.commit()
+    else:
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS location (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                type TEXT NOT NULL CHECK(type IN ('site', 'amenity', 'common_area', 'infrastructure')),
+                description TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS staff (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                role TEXT NOT NULL,
+                phone TEXT,
+                active INTEGER NOT NULL DEFAULT 1
+            );
+
+            CREATE TABLE IF NOT EXISTS task (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                description TEXT,
+                category TEXT NOT NULL CHECK(category IN (
+                    'plumbing', 'electrical', 'grounds', 'cleaning',
+                    'structural', 'equipment', 'safety', 'other'
+                )),
+                priority TEXT NOT NULL CHECK(priority IN ('low', 'medium', 'high', 'urgent')),
+                status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN (
+                    'pending', 'in_progress', 'completed', 'cancelled'
+                )),
+                location_id INTEGER,
+                assigned_to INTEGER,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                completed_at TEXT,
+                notes TEXT,
+                FOREIGN KEY (location_id) REFERENCES location(id),
+                FOREIGN KEY (assigned_to) REFERENCES staff(id)
+            );
+        """)
+        conn.commit()
 
     # Seed default locations if empty
-    count = conn.execute("SELECT COUNT(*) FROM location").fetchone()[0]
-    if count == 0:
+    row = _fetchone(conn, "SELECT COUNT(*) AS cnt FROM location")
+    if row["cnt"] == 0:
         locations = [
             ("Site 1-10", "site", "Powered caravan sites"),
             ("Site 11-20", "site", "Unpowered caravan sites"),
@@ -69,10 +155,9 @@ def init_db():
             ("Laundry", "infrastructure", "Coin-operated laundry room"),
             ("Playground", "common_area", "Children's playground"),
         ]
-        conn.executemany(
-            "INSERT INTO location (name, type, description) VALUES (?, ?, ?)",
-            locations,
-        )
+        for name, loc_type, desc in locations:
+            _execute(conn, "INSERT INTO location (name, type, description) VALUES (?, ?, ?)",
+                     (name, loc_type, desc))
         conn.commit()
 
     conn.close()
@@ -100,37 +185,48 @@ def get_tasks(status=None, category=None, priority=None):
         query += " AND t.priority = ?"
         params.append(priority)
     query += " ORDER BY CASE t.priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END, t.created_at DESC"
-    rows = conn.execute(query, params).fetchall()
+    rows = _fetchall(conn, query, params)
     conn.close()
-    return [dict(r) for r in rows]
+    return rows
 
 
 def get_task(task_id):
     conn = get_db()
-    row = conn.execute("""
+    row = _fetchone(conn, """
         SELECT t.*, l.name AS location_name, s.name AS staff_name
         FROM task t
         LEFT JOIN location l ON t.location_id = l.id
         LEFT JOIN staff s ON t.assigned_to = s.id
         WHERE t.id = ?
-    """, (task_id,)).fetchone()
+    """, (task_id,))
     conn.close()
-    return dict(row) if row else None
+    return row
 
 
 def create_task(data):
     conn = get_db()
     now = datetime.now(timezone.utc).isoformat()
-    conn.execute("""
-        INSERT INTO task (title, description, category, priority, status, location_id, assigned_to, created_at, updated_at, notes)
-        VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)
-    """, (
-        data["title"], data.get("description"), data["category"], data["priority"],
-        data.get("location_id") or None, data.get("assigned_to") or None,
-        now, now, data.get("notes"),
-    ))
+    if USE_PG:
+        cur = _execute(conn, """
+            INSERT INTO task (title, description, category, priority, status, location_id, assigned_to, created_at, updated_at, notes)
+            VALUES (%s, %s, %s, %s, 'pending', %s, %s, %s, %s, %s) RETURNING id
+        """, (
+            data["title"], data.get("description"), data["category"], data["priority"],
+            data.get("location_id") or None, data.get("assigned_to") or None,
+            now, now, data.get("notes"),
+        ))
+        task_id = cur.fetchone()["id"]
+    else:
+        _execute(conn, """
+            INSERT INTO task (title, description, category, priority, status, location_id, assigned_to, created_at, updated_at, notes)
+            VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)
+        """, (
+            data["title"], data.get("description"), data["category"], data["priority"],
+            data.get("location_id") or None, data.get("assigned_to") or None,
+            now, now, data.get("notes"),
+        ))
+        task_id = _fetchone(conn, "SELECT last_insert_rowid() AS id")["id"]
     conn.commit()
-    task_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
     conn.close()
     return task_id
 
@@ -139,7 +235,7 @@ def update_task(task_id, data):
     conn = get_db()
     now = datetime.now(timezone.utc).isoformat()
     completed_at = now if data.get("status") == "completed" else None
-    conn.execute("""
+    _execute(conn, """
         UPDATE task SET title=?, description=?, category=?, priority=?, status=?,
         location_id=?, assigned_to=?, updated_at=?, completed_at=COALESCE(?, completed_at), notes=?
         WHERE id=?
@@ -154,7 +250,7 @@ def update_task(task_id, data):
 
 def delete_task(task_id):
     conn = get_db()
-    conn.execute("DELETE FROM task WHERE id=?", (task_id,))
+    _execute(conn, "DELETE FROM task WHERE id=?", (task_id,))
     conn.commit()
     conn.close()
 
@@ -163,22 +259,22 @@ def delete_task(task_id):
 
 def get_locations():
     conn = get_db()
-    rows = conn.execute("SELECT * FROM location ORDER BY type, name").fetchall()
+    rows = _fetchall(conn, "SELECT * FROM location ORDER BY type, name")
     conn.close()
-    return [dict(r) for r in rows]
+    return rows
 
 
 def create_location(data):
     conn = get_db()
-    conn.execute("INSERT INTO location (name, type, description) VALUES (?, ?, ?)",
-                 (data["name"], data["type"], data.get("description")))
+    _execute(conn, "INSERT INTO location (name, type, description) VALUES (?, ?, ?)",
+             (data["name"], data["type"], data.get("description")))
     conn.commit()
     conn.close()
 
 
 def delete_location(loc_id):
     conn = get_db()
-    conn.execute("DELETE FROM location WHERE id=?", (loc_id,))
+    _execute(conn, "DELETE FROM location WHERE id=?", (loc_id,))
     conn.commit()
     conn.close()
 
@@ -187,26 +283,28 @@ def delete_location(loc_id):
 
 def get_staff(active_only=True):
     conn = get_db()
-    query = "SELECT * FROM staff"
     if active_only:
-        query += " WHERE active = 1"
-    query += " ORDER BY name"
-    rows = conn.execute(query).fetchall()
+        if USE_PG:
+            rows = _fetchall(conn, "SELECT * FROM staff WHERE active = TRUE ORDER BY name")
+        else:
+            rows = _fetchall(conn, "SELECT * FROM staff WHERE active = 1 ORDER BY name")
+    else:
+        rows = _fetchall(conn, "SELECT * FROM staff ORDER BY name")
     conn.close()
-    return [dict(r) for r in rows]
+    return rows
 
 
 def create_staff(data):
     conn = get_db()
-    conn.execute("INSERT INTO staff (name, role, phone) VALUES (?, ?, ?)",
-                 (data["name"], data["role"], data.get("phone")))
+    _execute(conn, "INSERT INTO staff (name, role, phone) VALUES (?, ?, ?)",
+             (data["name"], data["role"], data.get("phone")))
     conn.commit()
     conn.close()
 
 
 def toggle_staff_active(staff_id):
     conn = get_db()
-    conn.execute("UPDATE staff SET active = NOT active WHERE id=?", (staff_id,))
+    _execute(conn, "UPDATE staff SET active = NOT active WHERE id=?", (staff_id,))
     conn.commit()
     conn.close()
 
@@ -216,11 +314,11 @@ def toggle_staff_active(staff_id):
 def get_dashboard_stats():
     conn = get_db()
     stats = {}
-    stats["total"] = conn.execute("SELECT COUNT(*) FROM task").fetchone()[0]
-    stats["pending"] = conn.execute("SELECT COUNT(*) FROM task WHERE status='pending'").fetchone()[0]
-    stats["in_progress"] = conn.execute("SELECT COUNT(*) FROM task WHERE status='in_progress'").fetchone()[0]
-    stats["completed"] = conn.execute("SELECT COUNT(*) FROM task WHERE status='completed'").fetchone()[0]
-    stats["urgent"] = conn.execute("SELECT COUNT(*) FROM task WHERE priority='urgent' AND status NOT IN ('completed','cancelled')").fetchone()[0]
-    stats["high"] = conn.execute("SELECT COUNT(*) FROM task WHERE priority='high' AND status NOT IN ('completed','cancelled')").fetchone()[0]
+    stats["total"] = _fetchone(conn, "SELECT COUNT(*) AS cnt FROM task")["cnt"]
+    stats["pending"] = _fetchone(conn, "SELECT COUNT(*) AS cnt FROM task WHERE status='pending'")["cnt"]
+    stats["in_progress"] = _fetchone(conn, "SELECT COUNT(*) AS cnt FROM task WHERE status='in_progress'")["cnt"]
+    stats["completed"] = _fetchone(conn, "SELECT COUNT(*) AS cnt FROM task WHERE status='completed'")["cnt"]
+    stats["urgent"] = _fetchone(conn, "SELECT COUNT(*) AS cnt FROM task WHERE priority='urgent' AND status NOT IN ('completed','cancelled')")["cnt"]
+    stats["high"] = _fetchone(conn, "SELECT COUNT(*) AS cnt FROM task WHERE priority='high' AND status NOT IN ('completed','cancelled')")["cnt"]
     conn.close()
     return stats
