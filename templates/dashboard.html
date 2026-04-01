@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - Park Maintenance{% endblock %}
+
+{% block content %}
+<h1>Dashboard</h1>
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-number">{{ stats.total }}</div>
+        <div class="stat-label">Total Tasks</div>
+    </div>
+    <div class="stat-card stat-pending">
+        <div class="stat-number">{{ stats.pending }}</div>
+        <div class="stat-label">Pending</div>
+    </div>
+    <div class="stat-card stat-progress">
+        <div class="stat-number">{{ stats.in_progress }}</div>
+        <div class="stat-label">In Progress</div>
+    </div>
+    <div class="stat-card stat-done">
+        <div class="stat-number">{{ stats.completed }}</div>
+        <div class="stat-label">Completed</div>
+    </div>
+    <div class="stat-card stat-urgent">
+        <div class="stat-number">{{ stats.urgent }}</div>
+        <div class="stat-label">Urgent</div>
+    </div>
+    <div class="stat-card stat-high">
+        <div class="stat-number">{{ stats.high }}</div>
+        <div class="stat-label">High Priority</div>
+    </div>
+</div>
+
+{% if urgent_tasks %}
+<section>
+    <h2>Urgent Tasks</h2>
+    <div class="task-list">
+    {% for t in urgent_tasks %}
+        <div class="task-card priority-urgent">
+            <div class="task-header">
+                <strong>{{ t.title }}</strong>
+                <span class="badge badge-{{ t.status }}">{{ t.status | replace('_', ' ') | title }}</span>
+            </div>
+            <div class="task-meta">
+                {% if t.location_name %}<span>{{ t.location_name }}</span>{% endif %}
+                {% if t.staff_name %}<span>Assigned: {{ t.staff_name }}</span>{% endif %}
+            </div>
+            <div class="task-actions">
+                <a href="{{ url_for('task_edit', task_id=t.id) }}" class="btn btn-sm">Edit</a>
+                {% if t.status != 'in_progress' %}
+                <form method="post" action="{{ url_for('task_status', task_id=t.id) }}" class="inline">
+                    <input type="hidden" name="status" value="in_progress">
+                    <button class="btn btn-sm btn-primary">Start</button>
+                </form>
+                {% endif %}
+                {% if t.status != 'completed' %}
+                <form method="post" action="{{ url_for('task_status', task_id=t.id) }}" class="inline">
+                    <input type="hidden" name="status" value="completed">
+                    <button class="btn btn-sm btn-success">Complete</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+    {% endfor %}
+    </div>
+</section>
+{% endif %}
+
+<section>
+    <div class="section-header">
+        <h2>Recent Tasks</h2>
+        <a href="{{ url_for('task_new') }}" class="btn btn-primary">+ New Task</a>
+    </div>
+    {% if recent_tasks %}
+    <div class="task-list">
+    {% for t in recent_tasks %}
+        <div class="task-card priority-{{ t.priority }}">
+            <div class="task-header">
+                <strong>{{ t.title }}</strong>
+                <div>
+                    <span class="badge badge-{{ t.priority }}">{{ t.priority | title }}</span>
+                    <span class="badge badge-{{ t.status }}">{{ t.status | replace('_', ' ') | title }}</span>
+                </div>
+            </div>
+            <div class="task-meta">
+                <span>{{ t.category | title }}</span>
+                {% if t.location_name %}<span>{{ t.location_name }}</span>{% endif %}
+                {% if t.staff_name %}<span>{{ t.staff_name }}</span>{% endif %}
+            </div>
+            <div class="task-actions">
+                <a href="{{ url_for('task_edit', task_id=t.id) }}" class="btn btn-sm">Edit</a>
+            </div>
+        </div>
+    {% endfor %}
+    </div>
+    {% else %}
+    <p class="empty-state">No tasks yet. <a href="{{ url_for('task_new') }}">Create your first task</a>.</p>
+    {% endif %}
+</section>
+{% endblock %}

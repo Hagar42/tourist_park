@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Tasks - Park Maintenance{% endblock %}
+
+{% block content %}
+<div class="section-header">
+    <h1>Maintenance Tasks</h1>
+    <a href="{{ url_for('task_new') }}" class="btn btn-primary">+ New Task</a>
+</div>
+
+<div class="filters">
+    <form method="get" class="filter-form">
+        <select name="status" onchange="this.form.submit()">
+            <option value="">All Statuses</option>
+            <option value="pending" {% if current_status == 'pending' %}selected{% endif %}>Pending</option>
+            <option value="in_progress" {% if current_status == 'in_progress' %}selected{% endif %}>In Progress</option>
+            <option value="completed" {% if current_status == 'completed' %}selected{% endif %}>Completed</option>
+            <option value="cancelled" {% if current_status == 'cancelled' %}selected{% endif %}>Cancelled</option>
+        </select>
+        <select name="category" onchange="this.form.submit()">
+            <option value="">All Categories</option>
+            <option value="plumbing" {% if current_category == 'plumbing' %}selected{% endif %}>Plumbing</option>
+            <option value="electrical" {% if current_category == 'electrical' %}selected{% endif %}>Electrical</option>
+            <option value="grounds" {% if current_category == 'grounds' %}selected{% endif %}>Grounds</option>
+            <option value="cleaning" {% if current_category == 'cleaning' %}selected{% endif %}>Cleaning</option>
+            <option value="structural" {% if current_category == 'structural' %}selected{% endif %}>Structural</option>
+            <option value="equipment" {% if current_category == 'equipment' %}selected{% endif %}>Equipment</option>
+            <option value="safety" {% if current_category == 'safety' %}selected{% endif %}>Safety</option>
+            <option value="other" {% if current_category == 'other' %}selected{% endif %}>Other</option>
+        </select>
+        <select name="priority" onchange="this.form.submit()">
+            <option value="">All Priorities</option>
+            <option value="urgent" {% if current_priority == 'urgent' %}selected{% endif %}>Urgent</option>
+            <option value="high" {% if current_priority == 'high' %}selected{% endif %}>High</option>
+            <option value="medium" {% if current_priority == 'medium' %}selected{% endif %}>Medium</option>
+            <option value="low" {% if current_priority == 'low' %}selected{% endif %}>Low</option>
+        </select>
+        {% if current_status or current_category or current_priority %}
+        <a href="{{ url_for('task_list') }}" class="btn btn-sm">Clear Filters</a>
+        {% endif %}
+    </form>
+</div>
+
+{% if tasks %}
+<div class="task-list">
+{% for t in tasks %}
+    <div class="task-card priority-{{ t.priority }}">
+        <div class="task-header">
+            <strong>{{ t.title }}</strong>
+            <div>
+                <span class="badge badge-{{ t.priority }}">{{ t.priority | title }}</span>
+                <span class="badge badge-{{ t.status }}">{{ t.status | replace('_', ' ') | title }}</span>
+            </div>
+        </div>
+        {% if t.description %}
+        <p class="task-desc">{{ t.description }}</p>
+        {% endif %}
+        <div class="task-meta">
+            <span>{{ t.category | title }}</span>
+            {% if t.location_name %}<span>{{ t.location_name }}</span>{% endif %}
+            {% if t.staff_name %}<span>Assigned: {{ t.staff_name }}</span>{% endif %}
+            <span>Created: {{ t.created_at[:10] }}</span>
+        </div>
+        <div class="task-actions">
+            <a href="{{ url_for('task_edit', task_id=t.id) }}" class="btn btn-sm">Edit</a>
+            {% if t.status == 'pending' %}
+            <form method="post" action="{{ url_for('task_status', task_id=t.id) }}" class="inline">
+                <input type="hidden" name="status" value="in_progress">
+                <button class="btn btn-sm btn-primary">Start</button>
+            </form>
+            {% endif %}
+            {% if t.status in ('pending', 'in_progress') %}
+            <form method="post" action="{{ url_for('task_status', task_id=t.id) }}" class="inline">
+                <input type="hidden" name="status" value="completed">
+                <button class="btn btn-sm btn-success">Complete</button>
+            </form>
+            {% endif %}
+            <form method="post" action="{{ url_for('task_delete', task_id=t.id) }}" class="inline"
+                  onsubmit="return confirm('Delete this task?')">
+                <button class="btn btn-sm btn-danger">Delete</button>
+            </form>
+        </div>
+    </div>
+{% endfor %}
+</div>
+{% else %}
+<p class="empty-state">No tasks found. <a href="{{ url_for('task_new') }}">Create a new task</a>.</p>
+{% endif %}
+{% endblock %}

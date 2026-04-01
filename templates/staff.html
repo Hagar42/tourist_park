@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Staff - Park Maintenance{% endblock %}
+
+{% block content %}
+<h1>Staff Members</h1>
+
+<form method="post" action="{{ url_for('staff_new') }}" class="form inline-form">
+    <input type="text" name="name" placeholder="Full name" required>
+    <input type="text" name="role" placeholder="Role (e.g. Groundskeeper)" required>
+    <input type="text" name="phone" placeholder="Phone (optional)">
+    <button type="submit" class="btn btn-primary">Add Staff</button>
+</form>
+
+{% if staff %}
+<table class="table">
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Role</th>
+            <th>Phone</th>
+            <th>Status</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for s in staff %}
+        <tr class="{% if not s.active %}inactive{% endif %}">
+            <td>{{ s.name }}</td>
+            <td>{{ s.role }}</td>
+            <td>{{ s.phone or '-' }}</td>
+            <td><span class="badge {% if s.active %}badge-completed{% else %}badge-cancelled{% endif %}">{{ "Active" if s.active else "Inactive" }}</span></td>
+            <td>
+                <form method="post" action="{{ url_for('staff_toggle', staff_id=s.id) }}" class="inline">
+                    <button class="btn btn-sm">{{ "Deactivate" if s.active else "Activate" }}</button>
+                </form>
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p class="empty-state">No staff members yet.</p>
+{% endif %}
+{% endblock %}
