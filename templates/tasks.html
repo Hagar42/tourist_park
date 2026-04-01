@@ -51,6 +51,9 @@
                 <span class="badge badge-{{ t.status }}">{{ t.status | replace('_', ' ') | title }}</span>
             </div>
         </div>
+        {% if t.photo %}
+        <img src="{{ url_for('task_photo', task_id=t.id) }}" alt="Task photo" class="task-thumb">
+        {% endif %}
         {% if t.description %}
         <p class="task-desc">{{ t.description }}</p>
         {% endif %}
@@ -58,6 +61,12 @@
             <span>{{ t.category | title }}</span>
             {% if t.location_name %}<span>{{ t.location_name }}</span>{% endif %}
             {% if t.staff_name %}<span>Assigned: {{ t.staff_name }}</span>{% endif %}
+            {% if t.latitude and t.longitude %}
+            <a href="https://www.google.com/maps?q={{ t.latitude }},{{ t.longitude }}" target="_blank" rel="noopener" class="task-geo-link">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                Map
+            </a>
+            {% endif %}
             <span>Created: {{ t.created_at[:10] }}</span>
         </div>
         <div class="task-actions">

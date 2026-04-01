@@ -68,6 +68,48 @@
         </div>
     </div>
 
+    <!-- Photo capture -->
+    <div class="form-group">
+        <label>Photo</label>
+        <div class="photo-capture">
+            <label for="photo-input" class="btn btn-sm">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -2px"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                Take / Choose Photo
+            </label>
+            <input type="file" id="photo-input" accept="image/*" capture="environment" class="sr-only">
+            <input type="hidden" id="photo-data" name="photo" value="">
+            <button type="button" id="photo-remove" class="btn btn-sm btn-danger" style="display:{% if task and task.photo %} inline-block{% else %} none{% endif %}">Remove</button>
+        </div>
+        <img id="photo-preview"
+             src="{% if task and task.photo %}{{ url_for('task_photo', task_id=task.id) }}{% endif %}"
+             alt="Photo preview"
+             class="photo-preview"
+             style="display:{% if task and task.photo %} block{% else %} none{% endif %}">
+    </div>
+
+    <!-- Geolocation -->
+    <div class="form-group">
+        <label>GPS Location</label>
+        <div class="geo-capture">
+            <button type="button" id="geo-btn" class="btn btn-sm">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -2px"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                Get My Location
+            </button>
+            <span id="geo-status" class="geo-status">
+                {% if task and task.latitude and task.longitude %}
+                    {{ task.latitude }}, {{ task.longitude }}
+                {% endif %}
+            </span>
+        </div>
+        <input type="hidden" id="latitude" name="latitude" value="{{ task.latitude if task and task.latitude else '' }}">
+        <input type="hidden" id="longitude" name="longitude" value="{{ task.longitude if task and task.longitude else '' }}">
+        {% if task and task.latitude and task.longitude %}
+        <a href="https://www.google.com/maps?q={{ task.latitude }},{{ task.longitude }}" target="_blank" rel="noopener" class="btn btn-sm" style="margin-top:0.5rem">
+            View on Map
+        </a>
+        {% endif %}
+    </div>
+
     <div class="form-group">
         <label for="notes">Notes</label>
         <textarea id="notes" name="notes" rows="2">{{ task.notes if task and task.notes else '' }}</textarea>
@@ -78,4 +120,6 @@
         <a href="{{ url_for('task_list') }}" class="btn">Cancel</a>
     </div>
 </form>
+
+<script src="{{ url_for('static', filename='task-form.js') }}"></script>
 {% endblock %}

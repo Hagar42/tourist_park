@@ -1,6 +1,8 @@
 import os
 
-from flask import Flask, render_template, request, redirect, url_for, flash
+import base64
+
+from flask import Flask, render_template, request, redirect, url_for, flash, Response
 
 from models import (
     init_db, get_tasks, get_task, create_task, update_task, delete_task,
@@ -11,6 +13,7 @@ from models import (
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-key-change-in-production")
+app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024  # 10 MB max upload
 
 # Initialise database at startup
 init_db()
@@ -40,10 +43,23 @@ def task_list():
                            current_status=status, current_category=category, current_priority=priority)
 
 
+def _task_data_from_form():
+    """Extract task data from form, including photo and geolocation."""
+    data = dict(request.form)
+    # Photo comes as a data-URI from the client-side JS (base64-encoded)
+    photo = data.get("photo", "")
+    if photo and photo.startswith("data:"):
+        # Strip the data:image/...;base64, prefix and keep raw base64
+        data["photo"] = photo.split(",", 1)[1] if "," in photo else ""
+    elif not photo:
+        data["photo"] = ""
+    return data
+
+
 @app.route("/tasks/new", methods=["GET", "POST"])
 def task_new():
     if request.method == "POST":
-        create_task(request.form)
+        create_task(_task_data_from_form())
         flash("Task created successfully.", "success")
         return redirect(url_for("task_list"))
     locations = get_locations()
@@ -58,12 +74,22 @@ def task_edit(task_id):
         flash("Task not found.", "error")
         return redirect(url_for("task_list"))
     if request.method == "POST":
-        update_task(task_id, request.form)
+        update_task(task_id, _task_data_from_form())
         flash("Task updated.", "success")
         return redirect(url_for("task_list"))
     locations = get_locations()
     staff = get_staff()
     return render_template("task_form.html", task=task, locations=locations, staff=staff)
+
+
+@app.route("/tasks/<int:task_id>/photo")
+def task_photo(task_id):
+    """Serve task photo as a JPEG image."""
+    task = get_task(task_id)
+    if not task or not task.get("photo"):
+        return "", 404
+    img_bytes = base64.b64decode(task["photo"])
+    return Response(img_bytes, mimetype="image/jpeg")
 
 
 @app.route("/tasks/<int:task_id>/delete", methods=["POST"])

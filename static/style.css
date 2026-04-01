@@ -103,7 +103,22 @@ section { margin-bottom: 2.5rem; }
     margin-bottom: 0.5rem;
 }
 .task-desc { color: #475569; font-size: 0.9rem; margin-bottom: 0.5rem; }
-.task-meta { display: flex; gap: 1rem; font-size: 0.8rem; color: #64748b; flex-wrap: wrap; }
+.task-thumb {
+    width: 100%;
+    max-width: 280px;
+    height: auto;
+    border-radius: 6px;
+    margin-bottom: 0.5rem;
+    cursor: pointer;
+}
+.task-geo-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    color: #2563eb;
+    font-weight: 500;
+}
+.task-meta { display: flex; gap: 1rem; font-size: 0.8rem; color: #64748b; flex-wrap: wrap; align-items: center; }
 .task-actions {
     display: flex;
     gap: 0.5rem;
@@ -151,6 +166,15 @@ section { margin-bottom: 2.5rem; }
 .btn-success:hover { background: #059669; }
 .btn-danger { background: #ef4444; color: #fff; border-color: #ef4444; }
 .btn-danger:hover { background: #dc2626; }
+
+/* === Photo & Geo in forms === */
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+.photo-capture { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; }
+.photo-preview { max-width: 100%; max-height: 300px; border-radius: 8px; margin-top: 0.75rem; }
+.geo-capture { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; }
+.geo-status { font-size: 0.85rem; color: #64748b; }
+.geo-ok { color: #059669; }
+.geo-err { color: #dc2626; font-size: 0.8rem; }
 
 /* === Forms === */
 .form { max-width: 700px; }

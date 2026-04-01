@@ -95,9 +95,18 @@ def init_db():
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
                 completed_at TEXT,
-                notes TEXT
+                notes TEXT,
+                photo TEXT,
+                latitude TEXT,
+                longitude TEXT
             )
         """)
+        # Add columns if upgrading from older schema
+        for col, coltype in [("photo", "TEXT"), ("latitude", "TEXT"), ("longitude", "TEXT")]:
+            try:
+                cur.execute(f"ALTER TABLE task ADD COLUMN {col} {coltype}")
+            except Exception:
+                conn.rollback()
         conn.commit()
     else:
         conn.executescript("""
@@ -134,6 +143,9 @@ def init_db():
                 updated_at TEXT NOT NULL,
                 completed_at TEXT,
                 notes TEXT,
+                photo TEXT,
+                latitude TEXT,
+                longitude TEXT,
                 FOREIGN KEY (location_id) REFERENCES location(id),
                 FOREIGN KEY (assigned_to) REFERENCES staff(id)
             );
@@ -206,25 +218,24 @@ def get_task(task_id):
 def create_task(data):
     conn = get_db()
     now = datetime.now(timezone.utc).isoformat()
+    params = (
+        data["title"], data.get("description"), data["category"], data["priority"],
+        data.get("location_id") or None, data.get("assigned_to") or None,
+        now, now, data.get("notes"),
+        data.get("photo") or None,
+        data.get("latitude") or None, data.get("longitude") or None,
+    )
     if USE_PG:
         cur = _execute(conn, """
-            INSERT INTO task (title, description, category, priority, status, location_id, assigned_to, created_at, updated_at, notes)
-            VALUES (%s, %s, %s, %s, 'pending', %s, %s, %s, %s, %s) RETURNING id
-        """, (
-            data["title"], data.get("description"), data["category"], data["priority"],
-            data.get("location_id") or None, data.get("assigned_to") or None,
-            now, now, data.get("notes"),
-        ))
+            INSERT INTO task (title, description, category, priority, status, location_id, assigned_to, created_at, updated_at, notes, photo, latitude, longitude)
+            VALUES (%s, %s, %s, %s, 'pending', %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id
+        """, params)
         task_id = cur.fetchone()["id"]
     else:
         _execute(conn, """
-            INSERT INTO task (title, description, category, priority, status, location_id, assigned_to, created_at, updated_at, notes)
-            VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)
-        """, (
-            data["title"], data.get("description"), data["category"], data["priority"],
-            data.get("location_id") or None, data.get("assigned_to") or None,
-            now, now, data.get("notes"),
-        ))
+            INSERT INTO task (title, description, category, priority, status, location_id, assigned_to, created_at, updated_at, notes, photo, latitude, longitude)
+            VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?)
+        """, params)
         task_id = _fetchone(conn, "SELECT last_insert_rowid() AS id")["id"]
     conn.commit()
     conn.close()
@@ -235,14 +246,23 @@ def update_task(task_id, data):
     conn = get_db()
     now = datetime.now(timezone.utc).isoformat()
     completed_at = now if data.get("status") == "completed" else None
-    _execute(conn, """
+
+    # Only overwrite photo if a new one is provided
+    photo_sql = "photo=?" if data.get("photo") else "photo=photo"
+    photo_params = [data["photo"]] if data.get("photo") else []
+
+    _execute(conn, f"""
         UPDATE task SET title=?, description=?, category=?, priority=?, status=?,
-        location_id=?, assigned_to=?, updated_at=?, completed_at=COALESCE(?, completed_at), notes=?
+        location_id=?, assigned_to=?, updated_at=?, completed_at=COALESCE(?, completed_at), notes=?,
+        {photo_sql}, latitude=COALESCE(?, latitude), longitude=COALESCE(?, longitude)
         WHERE id=?
     """, (
         data["title"], data.get("description"), data["category"], data["priority"],
         data["status"], data.get("location_id") or None, data.get("assigned_to") or None,
-        now, completed_at, data.get("notes"), task_id,
+        now, completed_at, data.get("notes"),
+        *photo_params,
+        data.get("latitude") or None, data.get("longitude") or None,
+        task_id,
     ))
     conn.commit()
     conn.close()
