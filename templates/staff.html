@@ -25,11 +25,11 @@
     <tbody>
     {% for s in staff %}
         <tr class="{% if not s.active %}inactive{% endif %}">
-            <td>{{ s.name }}</td>
-            <td>{{ s.role }}</td>
-            <td>{{ s.phone or '-' }}</td>
-            <td><span class="badge {% if s.active %}badge-completed{% else %}badge-cancelled{% endif %}">{{ "Active" if s.active else "Inactive" }}</span></td>
-            <td>
+            <td data-label="Name">{{ s.name }}</td>
+            <td data-label="Role">{{ s.role }}</td>
+            <td data-label="Phone">{{ s.phone or '-' }}</td>
+            <td data-label="Status"><span class="badge {% if s.active %}badge-completed{% else %}badge-cancelled{% endif %}">{{ "Active" if s.active else "Inactive" }}</span></td>
+            <td data-label="Actions">
                 <form method="post" action="{{ url_for('staff_toggle', staff_id=s.id) }}" class="inline">
                     <button class="btn btn-sm">{{ "Deactivate" if s.active else "Activate" }}</button>
                 </form>

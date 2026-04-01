@@ -29,10 +29,10 @@
     <tbody>
     {% for loc in locations %}
         <tr>
-            <td>{{ loc.name }}</td>
-            <td><span class="badge">{{ loc.type | replace('_', ' ') | title }}</span></td>
-            <td>{{ loc.description or '-' }}</td>
-            <td>
+            <td data-label="Name">{{ loc.name }}</td>
+            <td data-label="Type"><span class="badge">{{ loc.type | replace('_', ' ') | title }}</span></td>
+            <td data-label="Description">{{ loc.description or '-' }}</td>
+            <td data-label="Actions">
                 <form method="post" action="{{ url_for('location_delete', loc_id=loc.id) }}" class="inline"
                       onsubmit="return confirm('Delete this location?')">
                     <button class="btn btn-sm btn-danger">Delete</button>
